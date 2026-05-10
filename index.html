@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html lang="hu">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CODESTORM // ULTRA CLOUD</title>
+    <script src="https://tailwindcss.com"></script>
+    <script src="https://jsdelivr.net"></script>
+    <link rel="stylesheet" href="https://cloudflare.com">
+    <style>
+        @import url('https://googleapis.com');
+        
+        :root { --primary: #3b82f6; --accent: #8b5cf6; --bg: #030303; }
+        body { background-color: var(--bg); color: #fff; font-family: 'Space Grotesk', sans-serif; margin: 0; overflow: hidden; }
+        
+        .editor-bg { background: #080808; font-family: 'Fira Code', monospace; }
+        .glass { background: rgba(255, 255, 255, 0.03); backdrop-filter: blur(12px); border: 1px solid rgba(255, 255, 255, 0.08); }
+        .neon-text { text-shadow: 0 0 10px rgba(59, 130, 246, 0.5); }
+        
+        /* Custom Scrollbar */
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-track { background: #0a0a0a; }
+        ::-webkit-scrollbar-thumb { background: #222; border-radius: 10px; }
+        ::-webkit-scrollbar-thumb:hover { background: var(--primary); }
+
+        .loading-shimmer {
+            background: linear-gradient(90deg, transparent, rgba(255,255,255,0.05), transparent);
+            background-size: 200% 100%;
+            animation: shimmer 1.5s infinite;
+        }
+        @keyframes shimmer { 0% { background-position: -200% 0; } 100% { background-position: 200% 0; } }
+    </style>
+</head>
+<body class="h-screen flex flex-col">
+
+    <!-- Deployment Overlay (Viewer) -->
+    <div id="viewer" class="hidden fixed inset-0 z-50 bg-white">
+        <div class="absolute top-4 left-1/2 -translate-x-1/2 glass px-4 py-2 rounded-full flex items-center gap-4 text-black border-zinc-200">
+            <span class="text-xs font-bold uppercase tracking-tighter">Preview Mode</span>
+            <button onclick="location.reload()" class="bg-black text-white text-[10px] px-3 py-1 rounded-full font-bold">EXIT</button>
+        </div>
+        <iframe id="viewer-frame" class="w-full h-full border-none"></iframe>
+    </div>
+
+    <!-- Main UI -->
+    <header class="h-16 border-b border-white/5 flex justify-between items-center px-6 bg-black/50 backdrop-blur-md">
+        <div class="flex items-center gap-4">
+            <div class="w-10 h-10 bg-gradient-to-br from-blue-600 to-purple-600 rounded-xl flex items-center justify-center shadow-lg shadow-blue-500/20">
+                <i class="fas fa-bolt text-white text-xl"></i>
+            </div>
+            <div>
+                <h1 class="font-bold tracking-tighter text-lg leading-none neon-text uppercase">Codestorm <span class="text-blue-500 italic">Ultra</span></h1>
+                <p class="text-[10px] text-gray-500 font-mono">v2.0.4-stable</p>
+            </div>
+        </div>
+
+        <div class="flex items-center gap-3">
+            <div class="relative group">
+                <i class="fas fa-link absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 text-xs"></i>
+                <input id="siteSlug" type="text" placeholder="projekt-neve" 
+                    class="bg-zinc-900/50 border border-white/5 pl-9 pr-4 py-2 rounded-xl text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none w-48 transition-all">
+            </div>
+            <button onclick="deployProject()" id="deployBtn" 
+                class="bg-blue-600 hover:bg-blue-500 px-6 py-2 rounded-xl font-bold text-sm flex items-center gap-2 transition-all active:scale-95 shadow-lg shadow-blue-600/20">
+                <i class="fas fa-cloud-upload-alt"></i> DEPLOY
+            </button>
+        </div>
+    </header>
+
+    <section class="flex flex-1 overflow-hidden">
+        <!-- Sidebar -->
+        <aside class="w-64 border-r border-white/5 bg-[#050505] flex flex-col">
+            <div class="p-4 flex justify-between items-center border-b border-white/5">
+                <span class="text-[10px] font-black text-gray-500 tracking-[0.2em] uppercase italic">Explorer</span>
+                <button onclick="addNewFile()" class="text-gray-500 hover:text-blue-400 p-1 transition"><i class="fas fa-plus-circle"></i></button>
+            </div>
+            <div id="fileList" class="flex-1 p-2 space-y-1 overflow-y-auto"></div>
+            <div class="p-4 bg-zinc-900/20 border-t border-white/5">
+                <div class="flex items-center gap-2 text-[10px] text-gray-500">
+                    <div class="w-2 h-2 rounded-full bg-green-500 animate-pulse"></div>
+                    CONNECTED TO SUPABASE
+                </div>
+            </div>
+        </aside>
+
+        <!-- Editor Area -->
+        <main class="flex-1 flex flex-col editor-bg relative">
+            <div id="tabBar" class="h-10 bg-black/40 border-b border-white/5 flex items-center px-4 gap-2">
+                <div id="activeTab" class="bg-white/5 border border-white/10 px-4 h-full flex items-center text-xs text-blue-400 font-mono">
+                    <i class="fab fa-html5 mr-2"></i> <span id="currentFileName">index.html</span>
+                </div>
+            </div>
+            <textarea id="editorField" 
+                class="flex-1 w-full bg-transparent p-8 text-sm outline-none resize-none text-zinc-300 leading-relaxed font-mono custom-scroll" 
+                spellcheck="false" placeholder="Ide írd a kódot..."></textarea>
+            
+            <!-- Toast Notification -->
+            <div id="toast" class="absolute bottom-6 right-6 translate-y-20 opacity-0 glass px-6 py-3 rounded-2xl flex items-center gap-3 transition-all duration-500">
+                <i id="toastIcon" class="fas fa-check-circle"></i>
+                <span id="toastMsg" class="text-sm font-medium"></span>
+            </div>
+        </main>
+    </section>
+
+    <script>
+        const SUPABASE_URL = 'https://supabase.co';
+        const SUPABASE_KEY = 'sb_publishable_pHkgFSiOVt4pI96Dzyi01w_F9TvRsUu';
+        const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+        let files = { 'index.html': '<!DOCTYPE html>\n<html>\n<head>\n  <style>\n    body { background: #0f172a; color: white; display: flex; justify-content: center; align-items: center; height: 100vh; font-family: system-ui; }\n    .card { background: rgba(255,255,255,0.1); padding: 2rem; border-radius: 1.5rem; border: 1px solid rgba(255,255,255,0.2); text-align: center; }\n  </style>\n</head>\n<body>\n  <div class="card">\n    <h1>Szia Codestorm! 🚀</h1>\n    <p>Ez az oldal sikeresen élesítve lett.</p>\n  </div>\n</body>\n</html>' };
+        let currentFile = 'index.html';
+
+        function showToast(msg, type = 'success') {
+            const toast = document.getElementById('toast');
+            const icon = document.getElementById('toastIcon');
+            document.getElementById('toastMsg').innerText = msg;
+            
+            icon.className = type === 'success' ? 'fas fa-check-circle text-green-500' : 'fas fa-exclamation-triangle text-red-500';
+            toast.classList.remove('translate-y-20', 'opacity-0');
+            setTimeout(() => toast.classList.add('translate-y-20', 'opacity-0'), 3000);
+        }
+
+        function renderFileList() {
+            const list = document.getElementById('fileList');
+            list.innerHTML = '';
+            Object.keys(files).forEach(name => {
+                const item = document.createElement('div');
+                item.className = `group flex items-center justify-between p-2.5 rounded-xl cursor-pointer transition-all ${name === currentFile ? 'bg-blue-600/10 text-blue-400 ring-1 ring-blue-500/30' : 'text-gray-400 hover:bg-white/5'}`;
+                item.innerHTML = `
+                    <div class="flex items-center gap-3 text-xs font-mono" onclick="switchFile('${name}')">
+                        <i class="${name.endsWith('.html') ? 'fab fa-html5' : 'fas fa-file-code'} text-sm opacity-70"></i>
+                        ${name}
+                    </div>
+                    ${name !== 'index.html' ? `<i onclick="deleteFile('${name}')" class="fas fa-trash text-[10px] opacity-0 group-hover:opacity-100 hover:text-red-500 transition"></i>` : ''}
+                `;
+                list.appendChild(item);
+            });
+        }
+
+        function switchFile(name) {
+            files[currentFile] = document.getElementById('editorField').value;
+            currentFile = name;
+            document.getElementById('currentFileName').innerText = name;
+            document.getElementById('editorField').value = files[name];
+            renderFileList();
+        }
+
+        function addNewFile() {
+            const name = prompt("Új fájl neve:");
+            if (name && !files[name]) {
+                files[name] = "";
+                switchFile(name);
+            }
+        }
+
+        function deleteFile(name) {
+            if(confirm('Biztosan törlöd?')) {
+                delete files[name];
+                if(currentFile === name) switchFile('index.html');
+                renderFileList();
+            }
+        }
+
+        async function deployProject() {
+            const btn = document.getElementById('deployBtn');
+            const slug = document.getElementById('siteSlug').value.trim().toLowerCase().replace(/[^a-z0-9-]/g, '-');
+            
+            if(!slug) return showToast("Adj meg egy nevet!", "error");
+            
+            btn.disabled = true;
+            btn.innerHTML = '<i class="fas fa-spinner animate-spin"></i> WORKING...';
+            files[currentFile] = document.getElementById('editorField').value;
+
+            try {
+                const { data, error } = await supabaseClient.rpc('deploy_site', {
+                    project_slug: slug,
+                    project_files: files
+                });
+
+                if (error) throw error;
+
+                const shareUrl = window.location.origin + window.location.pathname + '?s=' + slug;
+                showToast("Projekt élesítve!");
+                
+                setTimeout(() => {
+                    if(confirm("Sikeres mentés! Megnyitod az oldalt?")) window.open(shareUrl, '_blank');
+                }, 500);
+
+            } catch (err) {
+                showToast(err.message, "error");
+            } finally {
+                btn.disabled = false;
+                btn.innerHTML = '<i class="fas fa-cloud-upload-alt"></i> DEPLOY';
+            }
+        }
+
+        async function loadSite() {
+            const urlParams = new URLSearchParams(window.location.search);
+            const slug = urlParams.get('s');
+            if (slug) {
+                const { data } = await supabaseClient.from('sites').select('files').eq('slug', slug).single();
+                if (data) {
+                    document.getElementById('viewer').classList.remove('hidden');
+                    document.getElementById('viewer-frame').srcdoc = data.files['index.html'];
+                }
+            }
+        }
+
+        document.getElementById('editorField').value = files['index.html'];
+        renderFileList();
+        loadSite();
+    </script>
+</body>
+</html>
